@@ -1,11 +1,58 @@
 // Modules to control application life and create native browser window
-const {app, BrowserWindow} = require('electron')
+const {app, BrowserWindow, protocol} = require('electron')
+const request = require('request');
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let mainWindow
 
 function createWindow () {
+	var interceptCallback = (req, callback) => {
+		console.log(`intercepted ${req.method} ${req.url}`);
+		
+    console.log(`req method: ${JSON.stringify(req.method, null, 2)}`);
+    console.log(`req url: ${JSON.stringify(req.url, null, 2)}`);
+    console.log(`req headers: ${JSON.stringify(req.headers, null, 2)}`);
+
+		var options = {
+			method: req.method,
+			url: req.url,
+			headers: req.headers,
+			body: (req.uploadData && req.uploadData[0]) ? req.uploadData[0].bytes : undefined,
+			encoding: null,
+			gzip: false,
+			followRedirect: false,
+		};
+
+		request(options, function (error, response, body) { }).on('response', (res) => {
+			console.log(`'on response'`);
+			
+      console.log(`'on response' res code: ${JSON.stringify(res.statusCode, null, 2)}`);
+      console.log(`'on response' res headers: ${JSON.stringify(res.headers, null, 2)}`);
+
+			/*if (res.headers['set-cookie']) {
+				res.headers['set-cookie'] = res.headers['set-cookie'][0];
+      }
+      console.log(`'on response' res headers (after): ${JSON.stringify(res.headers, null, 2)}`);*/
+
+      callback({
+				statusCode: res ? res.statusCode : undefined,
+				headers: res ? res.headers : undefined,
+				data: res,
+			});
+		})
+		.on('error', (error) => {
+			console.error(`'on error': ${error.message}`);
+		});
+  };
+
+	protocol.interceptStreamProtocol('http', interceptCallback, (error) => {
+    if (error) console.error('failed to register protocol handler for HTTP');
+	});
+	protocol.interceptStreamProtocol('https', interceptCallback, (error) => {
+    if (error) console.error('failed to register protocol handler for HTTPS');
+	});
+
   // Create the browser window.
   mainWindow = new BrowserWindow({width: 800, height: 600})
 
